@@ -96,6 +96,7 @@ func (handle *SaveMatchResultHandler) ServeHTTP(w http.ResponseWriter, r *http.R
 			}
 		} else {
 			glog.V(define.VLogLevel).Info("SaveMatchResultHandler Finished, totalNum: ", curSaveInfo.cnt, ", req: ", saveMatchReq)
+			utility.UpdateJobStatus(saveMatchReq.AttributionID, "convMatch", 100)
 			close(curSaveInfo.ch)
 		}
 	}

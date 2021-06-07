@@ -135,9 +135,26 @@ func (handle *ImpProcessHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	//handle.fileHandle.filepath = impReq.Filepath
 	handle.fileHandle.attributionID = impReq.AttributionID
 	glog.Info("Ready_to_run, imp_file_path: ", impReq.Filepath)
+
+	// 将状态以及进度写入db
+	utility.UpdateJobStatus(impReq.AttributionID, "imp", 0)
+
 	defer func() {
 		glog.Infof("StartRunFileHandle: %s", impReq.Filepath)
 		fileList := utility.GetFileList(impReq.Filepath)
+
+		// 换算每个文件对应的进度
+		totalFileNum := 0
+		for _, filePath := range fileList {
+			filePathList := strings.Split(filePath, "/")
+			if strings.Contains(filePathList[len(filePathList)-1], "_") {
+				continue
+			}
+			totalFileNum += 1
+		}
+		singleFileProcessRate := 100.0 / totalFileNum
+		fileProcessed := 0
+
 		var wuidWG sync.WaitGroup
 		var impWG sync.WaitGroup
 
@@ -153,8 +170,12 @@ func (handle *ImpProcessHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 						utility.TouchFile(filePath + sendSuffix)
 						glog.Infof("File %s has already been Encrypted!", filePath)
 					}
+					//加密曝光不会并行，可以直接进行累加，然后更新状态
+					fileProcessed += 1
+					utility.UpdateJobStatus(impReq.AttributionID, "imp", int(singleFileProcessRate*fileProcessed))
 				} else {
 					glog.Info("All imps has been encrypted!")
+					utility.UpdateJobStatus(impReq.AttributionID, "imp", 100)
 					break
 				}
 			}
@@ -259,6 +280,7 @@ func (p *FileHandle) doGetConvRequest(attributionID string) error {
 	}
 	var resp dataprotocal.GetConvDataResponse
 	utility.DoHTTPPost(p.guestConvProcessPushPath, utility.ContentType, resqData, &resp)
+	utility.UpdateJobStatus(attributionID, "convMatch", 0)
 	// 打印请求和返回结果
 	glog.Infof("processLine doGetConvRequest, request: %v, resp: %v", resqData, resp)
 	return nil

@@ -30,6 +30,8 @@ type Config struct {
 	CoreDb      map[string]string `yaml:"CoreDb"`
 	MrConf      map[string]string `yaml:"MrConf"`
 	IsTest      bool              `yaml:"IsTest"`
+	DB          map[string]string `yaml:"DB"`
+	SQL         map[string]string `yaml:"SQL"`
 }
 
 func init() {

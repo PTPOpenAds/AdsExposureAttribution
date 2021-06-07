@@ -14,6 +14,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync/atomic"
 
@@ -40,6 +41,7 @@ type fileHandle struct {
 	convHandler ConvProcessHandler
 	// Guest 侧存储所有匹配成功的OpenID信息
 	ch chan string
+	kv kv.KV
 }
 
 // ConvProcessHandler 用于处理曝光文件数据的Handler
@@ -169,6 +171,11 @@ func (p *fileHandle) processLine(lines string) error {
 		var convInfo dataprotocal.ConvData
 		json.Unmarshal([]byte(line), &convInfo)
 		atomic.AddUint64(&lineNums, 1)
+
+		if lineNums%10000 == 0 {
+			p.convHandler.kv.Set(p.convHandler.attributionID+"::GuestConvProcessNum", strconv.Itoa(int(lineNums)))
+		}
+
 		glog.V(define.VLogLevel).Info("processLine: ", convInfo)
 
 		ImpFOpenid, err := crypto.Encrypt(p.convHandler.attributionID, util.StringToHex(convInfo.Openid))
@@ -207,6 +214,6 @@ func (p *fileHandle) processLine(lines string) error {
 		return nil
 	}
 
-	glog.V(define.VLogLevel).Info("processLine err: ", convMatchResp.MatchResult, ", ", dataprotocal.ConvMatchFlag)
+	//glog.V(define.VLogLevel).Info("processLine err: ", convMatchResp.MatchResult, ", ", dataprotocal.ConvMatchFlag)
 	return nil
 }
