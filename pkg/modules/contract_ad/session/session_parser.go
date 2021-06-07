@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -30,6 +29,7 @@ import (
 
 // 用于从http.request中解析对应的字段
 const (
+	AttributionIDKey  = "attribution_id"
 	AccountIDKey      = "account_id"
 	CampaignIdsKey    = "campaign_ids"
 	AppIdsKey         = "app_ids"
@@ -123,14 +123,6 @@ func CallCollectImpData(cids string, appids string, attrID string) (b bool, err 
 	return true, nil
 }
 
-func calcAttributionID(cids string, appids string) string {
-	idList := append(strings.Split(cids, ","), strings.Split(appids, ",")...)
-	sort.Strings(idList)
-	md5Hex := utility.MD5(strings.Join(idList, ","))[:15]
-	intV, _ := strconv.ParseInt(md5Hex, 16, 64)
-	return strconv.FormatInt(intV, 10)
-}
-
 type sessionHandler struct {
 	kv     kv.KV
 	jobMap map[string]bool
@@ -192,7 +184,6 @@ func (s *guestSessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	if err := s.kv.Set(GuestDataPathKey(sessResp.AttributionID), values.Get(GuestConvDataPath)); err != nil {
 		glog.Errorf("Init Guest Session failed : %s \n", err)
 	}
-
 }
 
 func (s *sessionHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -236,7 +227,7 @@ func (s *sessionHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// 防止重发
-	sessResp.AttributionID = calcAttributionID(sessReq.CampaignIds, sessReq.AppIds)
+	sessResp.AttributionID = utility.CalcAttributionID(sessReq.CampaignIds, sessReq.AppIds)
 	if _, ok := s.jobMap[sessResp.AttributionID]; ok {
 		errHandle(fmt.Errorf("duplicated attributionid %s", values))
 		return

@@ -9,6 +9,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"net/http"
@@ -24,6 +25,7 @@ import (
 	dataprocess "github.com/TencentAd/attribution/attribution/pkg/modules/contract_ad/data_process"
 	Define "github.com/TencentAd/attribution/attribution/pkg/modules/contract_ad/define"
 	"github.com/TencentAd/attribution/attribution/pkg/modules/contract_ad/session"
+	"github.com/TencentAd/attribution/attribution/pkg/modules/contract_ad/utility"
 	"github.com/golang/glog"
 )
 
@@ -48,6 +50,8 @@ var (
 	hostConvMatchSvrPath = flag.String("host_conv_match_svr_pattern", "/host/conv_data_match", "")
 	// Guest --> Host 推送最终匹配的conv对应的openid明文
 	hostSaveMatchedConvSvrPath = flag.String("host_save_matched_listen_pattern", "/host/save_matched_conv_data", "")
+	// Guest --> Host 查询进度
+	hostJobStatusSvrPath = flag.String("host_job_status_pattern", "/host/get_job_status", "")
 	// Host侧用于存储匹配结果的路径
 	hostMatchResultSavePath = flag.String("host_match_result_path", "data/host_match_result", "")
 
@@ -140,6 +144,37 @@ func hostSaveMatchedHandle() (bool, error) {
 	return true, nil
 }
 
+func getJobStatus(w http.ResponseWriter, r *http.Request) {
+	values := r.URL.Query()
+	glog.Info("Display_req: ", values)
+
+	attributionID := string(values.Get(session.AttributionIDKey))
+	campaignIDs := string(values.Get(session.CampaignIdsKey))
+	appIDs := string(values.Get(session.AppIdsKey))
+
+	if attributionID == "" {
+		attributionID = utility.CalcAttributionID(campaignIDs, appIDs)
+	}
+
+	jobStatus, err := utility.GetJobStatus(attributionID)
+
+	if err != nil {
+		glog.Error("Get job status failed for attribution_id: ", attributionID)
+	} else {
+		glog.Info("job status: ", jobStatus)
+	}
+
+	data, _ := json.Marshal(jobStatus)
+	glog.Info(data)
+	_, _ = w.Write(data)
+}
+
+func hostJobStatusHanle() (bool, error) {
+	http.HandleFunc(*hostJobStatusSvrPath, getJobStatus)
+	glog.Info("do hostJobStatusHanle succ: ", *hostJobStatusSvrPath)
+	return true, nil
+}
+
 // Guest接收Host侧的曝光加密信息f(openid)并进行加密
 func guestImpCryptoHandle() (bool, error) {
 	encryptSafeguard, err := safeguard.NewConvEncryptSafeguard()
@@ -213,6 +248,10 @@ func serveHTTP() error {
 
 		if ok, err := hostSaveMatchedHandle(); !ok {
 			glog.Errorf("do hostSaveMatchedHandle Failed, abort !")
+			return err
+		}
+		if ok, err := hostJobStatusHanle(); !ok {
+			glog.Errorf("do hostJobStatusHanle Failed, abort !")
 			return err
 		}
 
