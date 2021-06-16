@@ -111,8 +111,7 @@ func RunCommandRealTime(command string) error {
 }
 
 // DumpData : DumpData
-func DumpData(attributionID string) string {
-	src := mrConf["uniquser"] + attributionID
+func DumpData(attributionID string, src string) string {
 	dst := "data/imp/" + attributionID
 	if !config.Configuration.IsTest {
 		os.RemoveAll(dst)

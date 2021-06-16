@@ -16,6 +16,8 @@ import (
 
 const (
 	VLogLevel = 10
+	YYYYMMDD  = "20060102"
+	YYYYMM    = "200601"
 )
 
 var (

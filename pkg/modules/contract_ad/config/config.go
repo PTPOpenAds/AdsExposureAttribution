@@ -23,15 +23,26 @@ type WxOpenid struct {
 	Token         string `yaml:"token"`
 }
 
+type AccountConf struct {
+	NeedCampaign bool     `yaml:"needCampaign"`
+	Appids       string   `yaml:"appids"`
+	DiffDays     int      `yaml:"diffDays"`
+	DataType     string   `yaml:"dataType"`
+	Schema       []string `yaml:"schema"`
+	OpenidIndex  int      `yaml:"openidIndex"`
+	Seperator    string   `yaml:"seperator"`
+}
+
 // Config : config
 type Config struct {
-	WxOpenid    WxOpenid          `yaml:"WxOpenid"`
-	ServiceConf map[string]string `yaml:"ServiceConf"`
-	CoreDb      map[string]string `yaml:"CoreDb"`
-	MrConf      map[string]string `yaml:"MrConf"`
-	IsTest      bool              `yaml:"IsTest"`
-	DB          map[string]string `yaml:"DB"`
-	SQL         map[string]string `yaml:"SQL"`
+	WxOpenid       WxOpenid                `yaml:"WxOpenid"`
+	ServiceConf    map[string]string       `yaml:"ServiceConf"`
+	CoreDb         map[string]string       `yaml:"CoreDb"`
+	MrConf         map[string]string       `yaml:"MrConf"`
+	IsTest         bool                    `yaml:"IsTest"`
+	DB             map[string]string       `yaml:"DB"`
+	SQL            map[string]string       `yaml:"SQL"`
+	AccountConfMap map[string]*AccountConf `yaml:"AccountConfMap"`
 }
 
 func init() {

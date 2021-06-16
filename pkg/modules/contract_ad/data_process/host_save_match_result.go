@@ -12,10 +12,12 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/TencentAd/attribution/attribution/pkg/modules/contract_ad/session"
 	"github.com/TencentAd/attribution/attribution/pkg/modules/contract_ad/utility"
 
 	"github.com/TencentAd/attribution/attribution/pkg/common/define"
@@ -78,7 +80,11 @@ func (handle *SaveMatchResultHandler) ServeHTTP(w http.ResponseWriter, r *http.R
 			ch:  ch,
 			cnt: 0,
 		}
-		go utility.WriteToFile(ch, handle.hostMatchResultSavePath+"/"+saveMatchReq.AttributionID)
+		os.MkdirAll(handle.hostMatchResultSavePath+"/"+
+			session.AttributionAccountMap[saveMatchReq.AttributionID], os.ModePerm)
+		go utility.WriteToFile(ch, handle.hostMatchResultSavePath+"/"+
+			session.AttributionAccountMap[saveMatchReq.AttributionID]+"/"+
+			saveMatchReq.AttributionID+"_"+time.Now().Format(define.YYYYMMDD))
 	}
 	curSaveInfo := handle.saveInfoMap[saveMatchReq.AttributionID]
 	handle.Unlock()
