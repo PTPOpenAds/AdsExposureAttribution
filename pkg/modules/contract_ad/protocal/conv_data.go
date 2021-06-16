@@ -32,6 +32,7 @@ const (
 type ConvData struct {
 	Openid    string `json:"openid"`
 	Timestamp int    `json:"timestamp"`
+	Detail    string `json:"detail"`
 }
 
 type CryptoDataType string

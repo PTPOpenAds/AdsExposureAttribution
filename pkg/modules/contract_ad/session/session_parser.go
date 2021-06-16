@@ -27,6 +27,8 @@ import (
 	"github.com/golang/glog"
 )
 
+var AttributionAccountMap = make(map[string]string)
+
 // 用于从http.request中解析对应的字段
 const (
 	AttributionIDKey  = "attribution_id"
@@ -63,11 +65,6 @@ func (p *CreateSessionResponse) Init(AccountID string) {
 	p.ReCode = 200
 	p.Message = "Success"
 	p.BigPrimeString = define.PrimeStr
-	// p.BigPrimeHex = *big.NewInt(0)
-	// p.AttributionID = AccountID + "_" + strconv.FormatInt(time.Now().UnixNano(), 10)
-	//p.AttributionID = strconv.FormatInt(time.Now().UnixNano(), 10)
-	//p.AttributionID = strconv.FormatInt(time.Now().Unix(), 10)
-	//crypto.Km.GetEncryptKey(p.AttributionID)
 	glog.Infof("CreateSessionResponse Init: %v", *p)
 }
 
@@ -111,13 +108,25 @@ func getAdgroupID(cids string) (string, string) {
 	return strings.Join(aidList, ","), strings.Join(dateList, ",")
 }
 
-// CallCollectImpData 执行脚本收集CampaignId对应的曝光数据并转化为OpenId
-func CallCollectImpData(cids string, appids string, attrID string) (b bool, err error) {
-	adgroupIDs, dates := getAdgroupID(cids)
-	if err := utility.RunCommandWithRetry(utility.LoadExpData(dates, adgroupIDs, attrID)); err != nil {
-		return false, err
+// CallCollectImpData 执行脚本收集CampaignId对应的曝光数据
+func CallCollectImpData(accountID string, cids string, appids string, attrID string, needCampaign bool) (b bool, err error) {
+	glog.Info("needCampaign:", needCampaign)
+	if needCampaign {
+		adgroupIDs, dates := getAdgroupID(cids)
+		if err := utility.RunCommandWithRetry(utility.LoadExpData(dates, adgroupIDs, attrID)); err != nil {
+			return false, err
+		}
 	}
-	if err := utility.RunCommandWithRetry(utility.DumpData(attrID)); err != nil {
+	var src string
+	if needCampaign {
+		src = config.Configuration.MrConf["uniquser"] + attrID
+	} else {
+		src = config.Configuration.MrConf["dailydata"] + accountID + "/" + time.Now().AddDate(0, 0,
+			config.Configuration.AccountConfMap[accountID].DiffDays).Format(define.YYYYMMDD)
+	}
+	glog.Info("src:", src)
+	glog.Flush()
+	if err := utility.RunCommandWithRetry(utility.DumpData(attrID, src)); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -158,10 +167,9 @@ func (s *guestSessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 
 	values := r.URL.Query()
 	glog.Info("Display_req: ", values)
-	// sessionRequest 其实用不到，因为是Get请求，可以直接拿参数
 
-	if values.Get(AccountIDKey) == "" || values.Get(CampaignIdsKey) == "" ||
-		values.Get(AppIdsKey) == "" || values.Get(GuestConvDataPath) == "" {
+	// campaign_ids 以及 app_ids 不强制，因为T+1模式不需要这两个字段
+	if values.Get(AccountIDKey) == "" || values.Get(GuestConvDataPath) == "" {
 		_, _ = w.Write([]byte("some params missed"))
 		return
 	}
@@ -177,6 +185,7 @@ func (s *guestSessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		glog.Errorf("Do http get failed! : %s \n", err)
 	}
+	AttributionAccountMap[sessResp.AttributionID] = values.Get(AccountIDKey)
 
 	crypto.Km.GetEncryptKey(sessResp.AttributionID)
 	glog.Infof("Create Session Response: %+v\n", sessResp)
@@ -184,6 +193,10 @@ func (s *guestSessionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	if err := s.kv.Set(GuestDataPathKey(sessResp.AttributionID), values.Get(GuestConvDataPath)); err != nil {
 		glog.Errorf("Init Guest Session failed : %s \n", err)
 	}
+
+	data, _ := json.Marshal(sessResp)
+	_, _ = w.Write(data)
+	glog.Info("Display_response: ", sessResp)
 }
 
 func (s *sessionHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -206,17 +219,25 @@ func (s *sessionHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	sessReq.CampaignIds = string(values.Get(CampaignIdsKey))
-	if sessReq.CampaignIds == "" {
-		errHandle(fmt.Errorf(noCampaignIdsKeyError))
-		sessResp.Message = noCampaignIdsKeyError
-		return
+	// 根据AccountID 获取相关配置，T+1逻辑不需要传递campaign_ids以及app_ids
+	accountConf, hasAccountConfig := config.Configuration.AccountConfMap[sessReq.AccountID]
+	var needCampaign = true
+	if hasAccountConfig {
+		needCampaign = accountConf.NeedCampaign
+		sessReq.AppIds = accountConf.Appids
+	} else {
+		sessReq.AppIds = string(values.Get(AppIdsKey))
+		if sessReq.AppIds == "" {
+			errHandle(fmt.Errorf(noAppIdsKeyError))
+			sessResp.Message = noAppIdsKeyError
+			return
+		}
 	}
 
-	sessReq.AppIds = string(values.Get(AppIdsKey))
-	if sessReq.AppIds == "" {
-		errHandle(fmt.Errorf(noAppIdsKeyError))
-		sessResp.Message = noAppIdsKeyError
+	sessReq.CampaignIds = string(values.Get(CampaignIdsKey))
+	if needCampaign && sessReq.CampaignIds == "" {
+		errHandle(fmt.Errorf(noCampaignIdsKeyError))
+		sessResp.Message = noCampaignIdsKeyError
 		return
 	}
 
@@ -233,6 +254,7 @@ func (s *sessionHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	s.jobMap[sessResp.AttributionID] = true
+	AttributionAccountMap[sessResp.AttributionID] = sessReq.AccountID
 
 	crypto.Km.GetEncryptKey(sessResp.AttributionID)
 	glog.Infof("Calculate attribution id, appids:%s, campaign_ids:%s, attributionid:%s",
@@ -255,11 +277,14 @@ func (s *sessionHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	glog.Flush()
 	go func() {
-		if ok, err := CallCollectImpData(sessReq.CampaignIds, sessReq.AppIds, sessResp.AttributionID); !ok {
+		utility.UpdateJobStatus(sessResp.AttributionID, "prepareImp", 0)
+		if ok, err := CallCollectImpData(sessReq.AccountID, sessReq.CampaignIds, sessReq.AppIds, sessResp.AttributionID, needCampaign); !ok {
 			sessResp.SetFailedResponse("Failed Do CallCollectImpData")
 			glog.Info("Failed Do CallCollectImpData, req: ", req, "err: ", err)
 		} else {
-			sendRequest := fmt.Sprintf("curl -XGET 'http://127.0.0.1:9081/host/imp_process?attribution_id=%s&app_ids=%s'", sessResp.AttributionID, sessReq.AppIds)
+			utility.UpdateJobStatus(sessResp.AttributionID, "prepareImp", 100)
+			sendRequest := fmt.Sprintf("curl -XGET 'http://127.0.0.1:9081/host/imp_process?attribution_id=%s&app_ids=%s&account_id=%s'",
+				sessResp.AttributionID, sessReq.AppIds, sessReq.AccountID)
 			glog.Infof("[INFO] SendRequest: %s", sendRequest)
 			utility.RunCommandRealTime(sendRequest)
 		}

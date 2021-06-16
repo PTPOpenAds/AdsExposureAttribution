@@ -17,11 +17,13 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/TencentAd/attribution/attribution/pkg/common/define"
 	"github.com/TencentAd/attribution/attribution/pkg/crypto"
 	"github.com/TencentAd/attribution/attribution/pkg/crypto/util"
 	"github.com/TencentAd/attribution/attribution/pkg/impression/kv"
+	"github.com/TencentAd/attribution/attribution/pkg/modules/contract_ad/config"
 	dataprotocal "github.com/TencentAd/attribution/attribution/pkg/modules/contract_ad/protocal"
 	"github.com/TencentAd/attribution/attribution/pkg/modules/contract_ad/session"
 	"github.com/TencentAd/attribution/attribution/pkg/modules/contract_ad/utility"
@@ -115,7 +117,8 @@ func (handle *ConvProcessHandler) ServeHTTP(w http.ResponseWriter, r *http.Reque
 	glog.Info("Ready_to_run, conv_file_path: ", newHandler.filepath)
 	defer func() {
 		glog.Infof("StartRunFileHandle: %s", newHandler.filepath)
-		go utility.WriteToFile(newHandler.ch, newHandler.convHandler.guestMatchResultSavePath+"/"+handle.attributionID)
+		go utility.WriteToFile(newHandler.ch, newHandler.convHandler.guestMatchResultSavePath+"/"+
+			handle.attributionID+"_"+time.Now().Format(define.YYYYMMDD))
 		newHandler.Run()
 	}()
 
@@ -158,6 +161,21 @@ func (p *fileHandle) Run() error {
 	return nil
 }
 
+func constructConvInfo(line string, attributionID string) *dataprotocal.ConvData {
+	accountConf, ok := config.Configuration.AccountConfMap[session.AttributionAccountMap[attributionID]]
+	if ok && accountConf.DataType == "txt" {
+		openid := strings.Split(line, accountConf.Seperator)[accountConf.OpenidIndex]
+		return &dataprotocal.ConvData{
+			Openid: openid,
+			Detail: line,
+		}
+	} else {
+		var convInfo dataprotocal.ConvData
+		json.Unmarshal([]byte(line), &convInfo)
+		return &convInfo
+	}
+}
+
 func (p *fileHandle) processLine(lines string) error {
 
 	lineList := strings.Split(lines, utility.DefaultSeparator)
@@ -168,18 +186,16 @@ func (p *fileHandle) processLine(lines string) error {
 
 	// 加密发送请求数据
 	for _, line := range lineList {
-		var convInfo dataprotocal.ConvData
-		json.Unmarshal([]byte(line), &convInfo)
+		convInfo := constructConvInfo(line, p.convHandler.attributionID)
 		atomic.AddUint64(&lineNums, 1)
-
 		if lineNums%10000 == 0 {
 			p.convHandler.kv.Set(p.convHandler.attributionID+"::GuestConvProcessNum", strconv.Itoa(int(lineNums)))
 		}
 
-		glog.V(define.VLogLevel).Info("processLine: ", convInfo)
+		glog.V(define.VLogLevel).Info("processLine: ", convInfo, line)
 
 		ImpFOpenid, err := crypto.Encrypt(p.convHandler.attributionID, util.StringToHex(convInfo.Openid))
-		convInfoMap[ImpFOpenid] = &convInfo
+		convInfoMap[ImpFOpenid] = convInfo
 		if err != nil {
 			return err
 		}

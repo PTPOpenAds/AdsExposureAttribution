@@ -35,7 +35,6 @@ var (
 // FileHandle : 定义处理曝光handler
 type FileHandle struct {
 	kv                       kv.KV
-	filepath                 string
 	attributionID            string
 	guestEncryptImpPushPath  string
 	guestConvProcessPushPath string
@@ -239,6 +238,7 @@ func (p *FileHandle) processLine(lines string) error {
 		}
 		glog.V(define.VLogLevel).Infof("processLine: %+v", saveData)
 
+		//TODO: 后续看需不需要改成根据account来获取秘钥
 		ImpFOpenid, err := crypto.Encrypt(p.attributionID, util.StringToHex(saveData.Openid))
 		if err != nil {
 			return err
