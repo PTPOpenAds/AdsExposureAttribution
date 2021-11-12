@@ -278,8 +278,8 @@ AMS请求广告主，将计算好的曝光传输到广告主 /post_imp_data
    
    ![AdsAttribution ClientDeploy][4]
 
-[1]: ./docs/readme-images/readme-arch1-4layer.png
-[2]: ./docs/readme-images/readme-flowchart-psi.png
-[3]: ./docs/readme-images/readme-flowchart-main.png
-[4]: ./docs/readme-images/readme-arch2-end.png
+[1]: https://github.com/PTPOpenAds/AdsAttribution/blob/f1014e4edef49869e43e532d48e1b36ec0b1b5bf/docs/readme-images/readme-arch1-4layer.png
+[2]: https://github.com/PTPOpenAds/AdsAttribution/blob/f1014e4edef49869e43e532d48e1b36ec0b1b5bf/docs/readme-images/readme-flowchart-psi.png
+[3]: https://github.com/PTPOpenAds/AdsAttribution/blob/f1014e4edef49869e43e532d48e1b36ec0b1b5bf/docs/readme-images/readme-flowchart-main.png
+[4]: https://github.com/PTPOpenAds/AdsAttribution/blob/f1014e4edef49869e43e532d48e1b36ec0b1b5bf/docs/readme-images/readme-arch2-end.png
 
